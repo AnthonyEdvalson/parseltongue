@@ -4,8 +4,7 @@ import struct
 import threading
 from enum import Enum
 
-PACKET_SIZE = 2**12  # 2^12 = 4096
-HEADER_FORMAT = "QQ"
+HEADER_FORMAT = "<QQ"
 HEADER_SIZE = 16
 
 
@@ -63,8 +62,6 @@ class ClientConnection:
 
         message = wrap(request, uid)
 
-        print("client sending message #" + str(uid))
-
         with self.send_lock:
             self.socket.sendall(message)
 
@@ -87,11 +84,9 @@ class ClientConnection:
                 break
             else:
                 data_length, uid = unwrap_header(raw_response)
-                print("getting reply for #" + str(uid))
                 data = recv(self.socket, data_length)
 
                 self.active_transactions[uid].add_response(data)
-                print("reply gotten for #" + str(uid))
 
     def get_new_id(self):
         v = self.id_counter
@@ -99,16 +94,17 @@ class ClientConnection:
         return v
 
     def open(self):
-        print("connecting to " + str(self.foreign_addr))
-        self.socket.connect(self.foreign_addr)
+        try:
+            self.socket.connect(self.foreign_addr)
+        except ConnectionRefusedError:
+            addr = "{}:{}".format(*self.foreign_addr)
+            raise ConnectionRefusedError("Connection refused while attempting to connect to {}".format(addr))
         self.state = ConnectionState.Open
         self._delegate_async()
 
     def close(self):
         has_lock = self.closing_lock.acquire(False)
         if has_lock:
-
-            print("closing connection to " + str(self.foreign_addr))
 
             self.state = ConnectionState.Closing
             self.client.remove_connection(self)
@@ -156,8 +152,6 @@ class ServerConnection:
             assert len(read_fragment) == HEADER_SIZE
             length, uid = unwrap_header(read_fragment)
 
-            print("server getting request for #" + str(uid))
-
             self.reading_uid = uid
             self.read_remaining = length
             self.awaiting_header = False
@@ -166,7 +160,6 @@ class ServerConnection:
             self.read_remaining -= len(read_fragment)
 
         if self.read_remaining == 0:
-            print("server got request for #" + str(self.reading_uid))
             request = b''.join(self.read_data)
             self.execute_async(self.reading_uid, request)
             self.read_data.clear()
@@ -179,7 +172,6 @@ class ServerConnection:
     def execute(self, uid, request):
         data = self.handler(request)
         response = memoryview(wrap(data, uid))
-        print("response generated for #" + str(uid))
 
         with self.reply_lock:
             length = len(response)

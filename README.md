@@ -1,2 +1,2 @@
 # parseltongue
-High performance and multithreaded socket communication for Python
+Simple, multithreaded, high volume socket messaging for Python

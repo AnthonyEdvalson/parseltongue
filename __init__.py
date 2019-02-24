@@ -3,25 +3,25 @@ import socket
 import threading
 from typing import Callable, Tuple
 
-from connection import ClientConnection, PACKET_SIZE, ServerConnection, recv
+from parseltongue.connection import ClientConnection, ServerConnection, recv
 
 
 class Client:
     def __init__(self):
         self.connections = []
 
-    def connect(self, addr: Tuple[str, int]):
+    def connect(self, addr: Tuple[str, int]) -> ClientConnection:
         con = ClientConnection(self, addr)
         con.open()
         self.connections.append(con)
         return con
 
-    def remove_connection(self, con):
-        self.connections.remove(con)
-
     def close(self):
         for con in self.connections:
             con.close()
+
+    def _remove_connection(self, con):
+        self.connections.remove(con)
 
 
 class Server(object):
@@ -58,14 +58,10 @@ class ServerEngine:
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.setblocking(False)
 
-        try:
-            self.socket.bind(self.address)
-            self.socket.listen(10)
-            self.inputs.append(self.socket)
+        self.socket.bind(self.address)
 
-        except Exception:
-            self.close()
-            raise
+        self.socket.listen(10)
+        self.inputs.append(self.socket)
 
         self.address = self.socket.getsockname()
         return self.address
@@ -95,7 +91,6 @@ class ServerEngine:
 
     def socket_connect(self, s):
         con, client_address = s.accept()
-        print("server connected from " + str(client_address))
         con.setblocking(False)
         self.inputs.append(con)
         self.connections[con] = ServerConnection(self, con, self.handler)
